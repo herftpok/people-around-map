@@ -9,19 +9,24 @@ import styles from './MapScreen.module.css'
 
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
 const MAP_ZOOM = 13
-const MIN_ZOOM = 11
-const MAX_ZOOM = 18
-const MAX_SCENE_SCALE = 2.5   // circle grows from 95vw×1 to 95vw×2.5 at max zoom
-const EXPAND_ZOOM = 15
-const EXPAND_DELAY = 200
-const WHEEL_ZOOM_SPEED = 0.005
+const MIN_ZOOM = 13          // can't zoom out past the initial view
+const MAX_VIRTUAL_ZOOM = 22  // virtual zoom range (beyond Leaflet)
+const LEAFLET_MAX_ZOOM = 16  // tiles only load up to this level — beyond = pure CSS scale
+const EXPAND_ZOOM = 16       // zoom at which pins expand
+const EXPAND_DELAY = 150
+const WHEEL_ZOOM_SPEED = 0.006
 const ROTATION_WHEEL_SENSITIVITY = 0.3
-const LERP_SPEED = 0.12
+const LERP_SPEED = 0.13
 
-/* Scene CSS scale as a function of Leaflet zoom:
-   zoom 13 → scale 1, zoom 18 → scale MAX_SCENE_SCALE (exponential) */
-const SCALE_RATE = Math.log2(MAX_SCENE_SCALE) / (MAX_ZOOM - MAP_ZOOM)
+/* Scene CSS scale: zoom 13 → 1, zoom 22 → 8 (exponential).
+   Circle starts at 95vw and grows to 95vw × 8 = 760vw at max zoom. */
+const MAX_SCENE_SCALE = 8
+const SCALE_RATE = Math.log2(MAX_SCENE_SCALE) / (MAX_VIRTUAL_ZOOM - MAP_ZOOM)
 const sceneScaleForZoom = (z: number) => Math.pow(2, (z - MAP_ZOOM) * SCALE_RATE)
+
+/* Leaflet zoom is capped — beyond LEAFLET_MAX_ZOOM only CSS scale grows.
+   This prevents tile reloading flicker at deep zoom. */
+const leafletZoomFor = (z: number) => Math.min(z, LEAFLET_MAX_ZOOM)
 
 /* ---- Expose map instance to parent via ref ---- */
 function MapRefGrabber({ mapRef }: { mapRef: React.MutableRefObject<LeafletMap | null> }) {
@@ -61,17 +66,18 @@ export function MapScreen() {
       screenRef.current.style.setProperty('--scene-scale', String(scale))
       screenRef.current.style.setProperty('--scene-rotation', String(rotationRef.current))
     }
-    /* sync Leaflet zoom (native tiles stay crisp) */
+    /* sync Leaflet zoom (capped at LEAFLET_MAX_ZOOM to avoid tile flicker) */
     const map = mapRef.current
-    if (map && Math.abs(map.getZoom() - zoomRef.current) > 0.01) {
-      map.setZoom(zoomRef.current, { animate: false })
+    const lz = leafletZoomFor(zoomRef.current)
+    if (map && Math.abs(map.getZoom() - lz) > 0.01) {
+      map.setZoom(lz, { animate: false })
     }
     /* debounced expand check */
     window.clearTimeout(expandTimerRef.current)
     expandTimerRef.current = window.setTimeout(() => {
       setPinsExpanded(zoomRef.current >= EXPAND_ZOOM)
     }, EXPAND_DELAY)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- lerp animation for zoom + rotation ---- */
   const animate = useCallback(() => {
@@ -121,7 +127,7 @@ export function MapScreen() {
         targetRotationRef.current += (e.deltaY || e.deltaX) * ROTATION_WHEEL_SENSITIVITY
       } else {
         const delta = -e.deltaY * WHEEL_ZOOM_SPEED
-        targetZoomRef.current = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoomRef.current + delta))
+        targetZoomRef.current = Math.min(MAX_VIRTUAL_ZOOM, Math.max(MIN_ZOOM, targetZoomRef.current + delta))
       }
       startAnimation()
     }
@@ -159,7 +165,7 @@ export function MapScreen() {
         const dist = getTouchDist(e)
         const ratio = dist / pinchRef.current.startDist
         const zoomDelta = Math.log2(ratio)
-        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinchRef.current.startZoom + zoomDelta))
+        const z = Math.min(MAX_VIRTUAL_ZOOM, Math.max(MIN_ZOOM, pinchRef.current.startZoom + zoomDelta))
         zoomRef.current = z
         targetZoomRef.current = z
         /* rotation */
@@ -244,11 +250,13 @@ export function MapScreen() {
             dragging={false}
             zoomSnap={0}
             minZoom={MIN_ZOOM}
-            maxZoom={MAX_ZOOM}
+            maxZoom={LEAFLET_MAX_ZOOM}
           >
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-              keepBuffer={4}
+              keepBuffer={10}
+              updateWhenZooming={false}
+              updateWhenIdle={true}
             />
             <MapRefGrabber mapRef={mapRef} />
             {PINS.map(pin => (

@@ -161,6 +161,14 @@
   font-family: inherit;
 }
 
+/* Keep previous zoom tiles visible while new ones load — no gray flash */
+:global(.leaflet-tile-container) {
+  transition: opacity 0.15s linear !important;
+}
+:global(.leaflet-zoom-anim .leaflet-tile) {
+  will-change: auto !important;
+}
+
 :global(.leaflet-control-attribution) {
   display: none !important;
 }

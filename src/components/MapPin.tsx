@@ -10,8 +10,8 @@ interface Props {
   expanded: boolean
 }
 
-const PIN_SMALL = 14  // px — compact circle
-const PIN_LARGE = 36  // px — expanded rounded square
+const PIN_SMALL = 24  // px — compact circle
+const PIN_LARGE = 52  // px — expanded rounded square
 
 /** Characters considered "short" — always visible */
 const isShort = (s: string) => [...s].length <= 3
