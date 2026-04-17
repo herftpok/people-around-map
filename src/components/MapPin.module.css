@@ -1,0 +1,76 @@
+/* === Map Pin — avatar circle + status bubble === */
+
+.pin {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  /* Counter-rotate so pin stays upright when scene rotates */
+  /* rotation is applied via inline style */
+}
+
+/* ---- Status bubble ---- */
+.statusWrap {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.3s ease,
+              padding 0.3s ease;
+  opacity: 0;
+  padding: 0;
+  background: rgba(20, 20, 20, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.statusWrap.short {
+  /* 1-3 char statuses — always visible */
+  max-width: 60px;
+  opacity: 1;
+  padding: 3px 8px;
+}
+
+.statusWrap.revealed {
+  max-width: 220px;
+  opacity: 1;
+  padding: 4px 10px;
+}
+
+.statusText {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* ---- Avatar circle ---- */
+.avatar {
+  width: var(--pin-size, 32px);
+  height: var(--pin-size, 32px);
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  background: #c0aede;
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+              height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

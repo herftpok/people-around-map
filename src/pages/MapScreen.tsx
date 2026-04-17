@@ -1,7 +1,9 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { StarsBackground } from '../components/StarsBackground'
+import { MapPin } from '../components/MapPin'
+import { PINS } from '../data/pins'
 import styles from './MapScreen.module.css'
 
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
@@ -42,11 +44,22 @@ export function MapScreen() {
   const animatingRef = useRef(false)
   const pinchRef = useRef({ startDist: 0, startScale: 1, startAngle: 0, startRotation: 0 })
 
+  /* Lightweight state broadcast for pin components (throttled via rAF) */
+  const [pinView, setPinView] = useState({ scale: DEFAULT_SCALE, rotation: 0 })
+  const pinViewRAF = useRef(0)
+  const broadcastPinView = useCallback(() => {
+    cancelAnimationFrame(pinViewRAF.current)
+    pinViewRAF.current = requestAnimationFrame(() => {
+      setPinView({ scale: scaleRef.current, rotation: rotationRef.current })
+    })
+  }, [])
+
   const applyTransform = useCallback(() => {
     if (sceneRef.current) {
       sceneRef.current.style.transform = `scale(${scaleRef.current}) rotate(${rotationRef.current}deg)`
     }
-  }, [])
+    broadcastPinView()
+  }, [broadcastPinView])
 
   const animate = useCallback(() => {
     const scaleDiff = targetScaleRef.current - scaleRef.current
@@ -175,6 +188,14 @@ export function MapScreen() {
               keepBuffer={4}
             />
             <RecenterButton center={SPB_CENTER} />
+            {PINS.map(pin => (
+              <MapPin
+                key={pin.id}
+                pin={pin}
+                scale={pinView.scale}
+                rotation={pinView.rotation}
+              />
+            ))}
           </MapContainer>
         </div>
       </div>
