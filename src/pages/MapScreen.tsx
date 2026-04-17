@@ -7,7 +7,7 @@ import styles from './MapScreen.module.css'
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
 const MAP_ZOOM = 15   // higher base zoom for good detail
 
-const MIN_SCALE = 0.5
+const MIN_SCALE = DEFAULT_SCALE - 1  // максимум -1 от начального
 const MAX_SCALE = 8.0
 const DEFAULT_SCALE = 1.35
 const WHEEL_SENSITIVITY = 0.015
