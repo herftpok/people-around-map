@@ -34,26 +34,17 @@ function RecenterButton({ center }: { center: [number, number] }) {
   )
 }
 
-/* ---- helper: lock map bounds to initial viewport ---- */
-function MapBoundsEnforcer({ scale }: { scale: number }) {
+/* ---- helper: enable / disable dragging based on pin expansion ---- */
+function DragController({ expanded }: { expanded: boolean }) {
   const map = useMap()
-
   useEffect(() => {
-    // Set maxBounds to the initially visible area
-    const bounds = map.getBounds().pad(0.05) // 5% padding
-    map.setMaxBounds(bounds)
-    map.options.maxBoundsViscosity = 1.0
-  }, [map])
-
-  useEffect(() => {
-    // Only allow dragging when zoomed past default
-    if (scale > DEFAULT_SCALE + 0.15) {
+    if (expanded) {
       map.dragging.enable()
     } else {
       map.dragging.disable()
+      map.setView(SPB_CENTER, MAP_ZOOM, { animate: true })
     }
-  }, [map, scale])
-
+  }, [map, expanded])
   return null
 }
 
@@ -69,29 +60,26 @@ export function MapScreen() {
   const animatingRef = useRef(false)
   const pinchRef = useRef({ startDist: 0, startScale: 1, startAngle: 0, startRotation: 0 })
 
-  /* Lightweight state broadcast for pin components (throttled via rAF) */
-  const [pinView, setPinView] = useState({ scale: DEFAULT_SCALE, rotation: 0 })
+  const screenRef = useRef<HTMLDivElement>(null)
   const [pinsExpanded, setPinsExpanded] = useState(false)
   const expandTimerRef = useRef(0)
-  const pinViewRAF = useRef(0)
-  const broadcastPinView = useCallback(() => {
-    cancelAnimationFrame(pinViewRAF.current)
-    pinViewRAF.current = requestAnimationFrame(() => {
-      setPinView({ scale: scaleRef.current, rotation: rotationRef.current })
-    })
-    /* Debounced expand: only fires 200ms after zoom crosses threshold and stops */
-    window.clearTimeout(expandTimerRef.current)
-    expandTimerRef.current = window.setTimeout(() => {
-      setPinsExpanded(scaleRef.current >= EXPAND_THRESHOLD)
-    }, EXPAND_DELAY)
-  }, [])
 
   const applyTransform = useCallback(() => {
     if (sceneRef.current) {
       sceneRef.current.style.transform = `scale(${scaleRef.current}) rotate(${rotationRef.current}deg)`
     }
-    broadcastPinView()
-  }, [broadcastPinView])
+    /* Set CSS custom properties so pins counter-scale/rotate via pure CSS — no React re-render */
+    const screen = screenRef.current
+    if (screen) {
+      screen.style.setProperty('--scene-scale', String(scaleRef.current))
+      screen.style.setProperty('--scene-rotation', String(rotationRef.current))
+    }
+    /* Debounced expand: fires 200ms after zoom crosses threshold and stops */
+    window.clearTimeout(expandTimerRef.current)
+    expandTimerRef.current = window.setTimeout(() => {
+      setPinsExpanded(scaleRef.current >= EXPAND_THRESHOLD)
+    }, EXPAND_DELAY)
+  }, [])
 
   const animate = useCallback(() => {
     const scaleDiff = targetScaleRef.current - scaleRef.current
@@ -199,7 +187,7 @@ export function MapScreen() {
   }, [startAnimation])
 
   return (
-    <div className={styles.screen}>
+    <div className={styles.screen} ref={screenRef}>
       <StarsBackground starCount={350} />
       <div className={styles.scene} ref={sceneRef}>
         <div className={styles.glow} />
@@ -220,14 +208,12 @@ export function MapScreen() {
               keepBuffer={4}
             />
             <RecenterButton center={SPB_CENTER} />
-            <MapBoundsEnforcer scale={pinView.scale} />
+            <DragController expanded={pinsExpanded} />
             {PINS.map(pin => (
               <MapPin
                 key={pin.id}
                 pin={pin}
                 expanded={pinsExpanded}
-                rotation={pinView.rotation}
-                scale={pinView.scale}
               />
             ))}
           </MapContainer>
