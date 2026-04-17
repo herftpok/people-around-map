@@ -6,9 +6,11 @@
   flex-direction: column;
   align-items: center;
   pointer-events: auto;
-  /* Counter-rotate to stay upright when scene is rotated.
-     No counter-scale needed — Leaflet handles zoom natively with crisp tiles. */
-  transform: rotate(calc(-1 * var(--scene-rotation, 0) * 1deg));
+  /* Counter-rotate to stay upright + counter-scale to keep consistent size
+     when scene is CSS-scaled. Uses CSS vars from .screen */
+  transform:
+    rotate(calc(-1 * var(--scene-rotation, 0) * 1deg))
+    scale(calc(1 / var(--scene-scale, 1)));
   transform-origin: center center;
 }
 
