@@ -15,7 +15,7 @@ const MIN_SCALE = (100 - 10) / CIRCLE_VW  // круг помещается в э
 const MAX_SCALE = 8.0
 const WHEEL_SENSITIVITY = 0.015
 const LERP_SPEED = 0.12
-const EXPAND_THRESHOLD = 2.5  // scale at which pins expand
+const EXPAND_THRESHOLD = 4.0  // scale at which pins expand
 const EXPAND_DELAY = 200      // ms after zoom stops
 
 /* ---- helper: recenter map ---- */
@@ -32,6 +32,29 @@ function RecenterButton({ center }: { center: [number, number] }) {
       aria-label="Центрировать карту"
     />
   )
+}
+
+/* ---- helper: lock map bounds to initial viewport ---- */
+function MapBoundsEnforcer({ scale }: { scale: number }) {
+  const map = useMap()
+
+  useEffect(() => {
+    // Set maxBounds to the initially visible area
+    const bounds = map.getBounds().pad(0.05) // 5% padding
+    map.setMaxBounds(bounds)
+    map.options.maxBoundsViscosity = 1.0
+  }, [map])
+
+  useEffect(() => {
+    // Only allow dragging when zoomed past default
+    if (scale > DEFAULT_SCALE + 0.15) {
+      map.dragging.enable()
+    } else {
+      map.dragging.disable()
+    }
+  }, [map, scale])
+
+  return null
 }
 
 const ROTATION_WHEEL_SENSITIVITY = 0.3
@@ -190,13 +213,14 @@ export function MapScreen() {
             scrollWheelZoom={false}
             touchZoom={false}
             doubleClickZoom={false}
-            dragging
+            dragging={false}
           >
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               keepBuffer={4}
             />
             <RecenterButton center={SPB_CENTER} />
+            <MapBoundsEnforcer scale={pinView.scale} />
             {PINS.map(pin => (
               <MapPin
                 key={pin.id}
