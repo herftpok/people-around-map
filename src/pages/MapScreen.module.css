@@ -1,0 +1,166 @@
+/* === MapScreen — full-screen cosmic map === */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+/* ---- Scene: everything that zooms together ---- */
+.scene {
+  position: absolute;
+  inset: 0;
+  /* GPU-accelerated scaling — no layout, instant with zoom gesture */
+  will-change: transform;
+  transform-origin: center center;
+}
+
+/* ---- Glow effect ---- */
+.glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(139, 92, 246, 0.35) 0%,
+    rgba(59, 207, 199, 0.25) 40%,
+    rgba(59, 207, 199, 0.08) 65%,
+    transparent 80%
+  );
+  filter: blur(30px);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ---- Circular map wrapper ---- */
+.circleWrap {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 95vw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 2;
+  box-shadow:
+    0 0 40px 8px rgba(139, 92, 246, 0.3),
+    0 0 80px 20px rgba(59, 207, 199, 0.15);
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+  background: #e8e4da;
+}
+
+/* Hide leaflet inner recenter button (we use our own outer button) */
+.centerBtn {
+  display: none;
+}
+
+/* ---- HUD elements ---- */
+
+.topBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 20px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.topBar > * {
+  pointer-events: auto;
+}
+
+.cityName {
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  text-transform: lowercase;
+}
+
+.topRight {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.iconBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(30, 30, 30, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.iconBtn:active {
+  background: rgba(60, 60, 60, 0.7);
+  transform: scale(0.93);
+}
+
+.bottomCenter {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.centerBtnLarge {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(30, 30, 30, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.centerBtnLarge:active {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.9);
+}
+
+/* ---- Leaflet overrides ---- */
+
+:global(.leaflet-container) {
+  background: #e8e4da !important;
+  font-family: inherit;
+}
+
+:global(.leaflet-control-attribution) {
+  display: none !important;
+}
