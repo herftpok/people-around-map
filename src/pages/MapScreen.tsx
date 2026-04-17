@@ -7,7 +7,7 @@ import { PINS } from '../data/pins'
 import styles from './MapScreen.module.css'
 
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
-const MAP_ZOOM = 15   // higher base zoom for good detail
+const MAP_ZOOM = 13   // more city visible in the initial circle
 
 const DEFAULT_SCALE = 1.35
 const CIRCLE_VW = 95
