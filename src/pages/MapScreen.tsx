@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
+import type { Map as LeafletMap } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { StarsBackground } from '../components/StarsBackground'
 import { MapPin } from '../components/MapPin'
@@ -7,120 +8,123 @@ import { PINS } from '../data/pins'
 import styles from './MapScreen.module.css'
 
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
-const MAP_ZOOM = 13   // more city visible in the initial circle
-
-const DEFAULT_SCALE = 1.35
-const CIRCLE_VW = 95
-const MIN_SCALE = (100 - 10) / CIRCLE_VW  // круг помещается в экран с ~5vw отступом по бокам
-const MAX_SCALE = 8.0
-const WHEEL_SENSITIVITY = 0.015
+const MAP_ZOOM = 13
+const MIN_ZOOM = 11
+const MAX_ZOOM = 18
+const EXPAND_ZOOM = 15        // Leaflet zoom at which pins expand
+const EXPAND_DELAY = 200
+const WHEEL_ZOOM_SPEED = 0.004
+const ROTATION_WHEEL_SENSITIVITY = 0.3
 const LERP_SPEED = 0.12
-const EXPAND_THRESHOLD = 4.0  // scale at which pins expand
-const EXPAND_DELAY = 200      // ms after zoom stops
 
-/* ---- helper: recenter map ---- */
-function RecenterButton({ center }: { center: [number, number] }) {
+/* ---- Expose map instance to parent via ref ---- */
+function MapRefGrabber({ mapRef }: { mapRef: React.MutableRefObject<LeafletMap | null> }) {
   const map = useMap()
-  const handleClick = useCallback(() => {
-    map.setView(center, MAP_ZOOM, { animate: false })
-  }, [map, center])
-
-  return (
-    <button
-      className={styles.centerBtn}
-      onClick={handleClick}
-      aria-label="Центрировать карту"
-    />
-  )
-}
-
-/* ---- helper: enable / disable dragging based on pin expansion ---- */
-function DragController({ expanded }: { expanded: boolean }) {
-  const map = useMap()
-  useEffect(() => {
-    if (expanded) {
-      map.dragging.enable()
-    } else {
-      map.dragging.disable()
-      map.setView(SPB_CENTER, MAP_ZOOM, { animate: true })
-    }
-  }, [map, expanded])
+  useEffect(() => { mapRef.current = map }, [map, mapRef])
   return null
 }
 
-const ROTATION_WHEEL_SENSITIVITY = 0.3
+/* ---- Watch Leaflet zoom and fire expand callback ---- */
+function ZoomWatcher({ onExpandChange }: { onExpandChange: (v: boolean) => void }) {
+  const map = useMap()
+  const timerRef = useRef(0)
+  useEffect(() => {
+    const check = () => {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = window.setTimeout(() => {
+        onExpandChange(map.getZoom() >= EXPAND_ZOOM)
+      }, EXPAND_DELAY)
+    }
+    map.on('zoom', check)
+    map.on('zoomend', check)
+    // initial
+    check()
+    return () => { map.off('zoom', check); map.off('zoomend', check) }
+  }, [map, onExpandChange])
+  return null
+}
 
 export function MapScreen() {
+  const screenRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<HTMLDivElement>(null)
-  const scaleRef = useRef(DEFAULT_SCALE)
-  const targetScaleRef = useRef(DEFAULT_SCALE)
+  const mapRef = useRef<LeafletMap | null>(null)
+
+  /* ---- rotation state (CSS only, no Leaflet involvement) ---- */
   const rotationRef = useRef(0)
   const targetRotationRef = useRef(0)
   const rafRef = useRef(0)
   const animatingRef = useRef(false)
-  const pinchRef = useRef({ startDist: 0, startScale: 1, startAngle: 0, startRotation: 0 })
 
-  const screenRef = useRef<HTMLDivElement>(null)
+  /* ---- pin expansion ---- */
   const [pinsExpanded, setPinsExpanded] = useState(false)
-  const expandTimerRef = useRef(0)
+  const handleExpandChange = useCallback((v: boolean) => setPinsExpanded(v), [])
 
-  const applyTransform = useCallback(() => {
+  /* ---- pinch gesture state ---- */
+  const pinchRef = useRef({ startDist: 0, startZoom: MAP_ZOOM, startAngle: 0, startRotation: 0 })
+
+  /* ---- drag state (single-finger / mouse, rotation-compensated) ---- */
+  const dragRef = useRef({ active: false, lastX: 0, lastY: 0 })
+
+  /* ---- apply rotation to scene + CSS var for pin counter-rotation ---- */
+  const applyRotation = useCallback(() => {
     if (sceneRef.current) {
-      sceneRef.current.style.transform = `scale(${scaleRef.current}) rotate(${rotationRef.current}deg)`
+      sceneRef.current.style.transform = `rotate(${rotationRef.current}deg)`
     }
-    /* Set CSS custom properties so pins counter-scale/rotate via pure CSS — no React re-render */
-    const screen = screenRef.current
-    if (screen) {
-      screen.style.setProperty('--scene-scale', String(scaleRef.current))
-      screen.style.setProperty('--scene-rotation', String(rotationRef.current))
+    if (screenRef.current) {
+      screenRef.current.style.setProperty('--scene-rotation', String(rotationRef.current))
     }
-    /* Debounced expand: fires 200ms after zoom crosses threshold and stops */
-    window.clearTimeout(expandTimerRef.current)
-    expandTimerRef.current = window.setTimeout(() => {
-      setPinsExpanded(scaleRef.current >= EXPAND_THRESHOLD)
-    }, EXPAND_DELAY)
   }, [])
 
-  const animate = useCallback(() => {
-    const scaleDiff = targetScaleRef.current - scaleRef.current
-    const rotDiff = targetRotationRef.current - rotationRef.current
-    if (Math.abs(scaleDiff) < 0.001 && Math.abs(rotDiff) < 0.05) {
-      scaleRef.current = targetScaleRef.current
+  /* ---- lerp animation for smooth rotation ---- */
+  const animateRotation = useCallback(() => {
+    const diff = targetRotationRef.current - rotationRef.current
+    if (Math.abs(diff) < 0.05) {
       rotationRef.current = targetRotationRef.current
-      applyTransform()
+      applyRotation()
       animatingRef.current = false
       return
     }
-    scaleRef.current += scaleDiff * LERP_SPEED
-    rotationRef.current += rotDiff * LERP_SPEED
-    applyTransform()
-    rafRef.current = requestAnimationFrame(animate)
-  }, [applyTransform])
+    rotationRef.current += diff * LERP_SPEED
+    applyRotation()
+    rafRef.current = requestAnimationFrame(animateRotation)
+  }, [applyRotation])
 
-  const startAnimation = useCallback(() => {
+  const startRotation = useCallback(() => {
     if (!animatingRef.current) {
       animatingRef.current = true
-      rafRef.current = requestAnimationFrame(animate)
+      rafRef.current = requestAnimationFrame(animateRotation)
     }
-  }, [animate])
+  }, [animateRotation])
 
+  /* ---- helper: compensate drag delta for scene rotation ---- */
+  const panCompensated = useCallback((dx: number, dy: number) => {
+    const map = mapRef.current
+    if (!map) return
+    const rad = -rotationRef.current * Math.PI / 180
+    const mx = dx * Math.cos(rad) - dy * Math.sin(rad)
+    const my = dx * Math.sin(rad) + dy * Math.cos(rad)
+    map.panBy([-mx, -my], { animate: false })
+  }, [])
+
+  /* ---- main event listeners ---- */
   useEffect(() => {
-    applyTransform()
-
-    const el = sceneRef.current?.parentElement
+    applyRotation()
+    const el = screenRef.current
     if (!el) return
 
-    /* ---- wheel: zoom (normal) / rotate (shift) ---- */
+    /* ---- wheel: normal → Leaflet zoom, shift → rotation ---- */
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       if (e.shiftKey) {
-        const delta = (e.deltaY || e.deltaX) * ROTATION_WHEEL_SENSITIVITY
-        targetRotationRef.current += delta
+        targetRotationRef.current += (e.deltaY || e.deltaX) * ROTATION_WHEEL_SENSITIVITY
+        startRotation()
       } else {
-        const delta = -e.deltaY * WHEEL_SENSITIVITY
-        targetScaleRef.current = Math.min(MAX_SCALE, Math.max(MIN_SCALE, targetScaleRef.current + delta))
+        const map = mapRef.current
+        if (!map) return
+        const delta = -e.deltaY * WHEEL_ZOOM_SPEED
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, map.getZoom() + delta))
+        map.setZoom(z, { animate: false })
       }
-      startAnimation()
     }
 
     /* ---- touch helpers ---- */
@@ -128,63 +132,102 @@ export function MapScreen() {
       const [a, b] = [e.touches[0], e.touches[1]]
       return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
     }
-
     const getTouchAngle = (e: TouchEvent) => {
       const [a, b] = [e.touches[0], e.touches[1]]
       return Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * (180 / Math.PI)
     }
 
-    /* ---- two-finger: pinch zoom + rotation ---- */
+    /* ---- touch start ---- */
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
+        const map = mapRef.current
         pinchRef.current = {
           startDist: getTouchDist(e),
-          startScale: scaleRef.current,
+          startZoom: map?.getZoom() ?? MAP_ZOOM,
           startAngle: getTouchAngle(e),
           startRotation: rotationRef.current,
         }
+        dragRef.current.active = false
+      } else if (e.touches.length === 1) {
+        dragRef.current = { active: true, lastX: e.touches[0].clientX, lastY: e.touches[0].clientY }
       }
     }
 
+    /* ---- touch move: 2-finger → pinch zoom + rotate, 1-finger → drag ---- */
     const onTouchMove = (e: TouchEvent) => {
+      const map = mapRef.current
+      if (!map) return
       if (e.touches.length === 2) {
         e.preventDefault()
         /* zoom */
         const dist = getTouchDist(e)
         const ratio = dist / pinchRef.current.startDist
-        const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinchRef.current.startScale * ratio))
-        targetScaleRef.current = newScale
-        scaleRef.current = newScale
-
+        const zoomDelta = Math.log2(ratio)
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pinchRef.current.startZoom + zoomDelta))
+        map.setZoom(z, { animate: false })
         /* rotation */
         const angleDelta = getTouchAngle(e) - pinchRef.current.startAngle
-        const newRotation = pinchRef.current.startRotation + angleDelta
-        targetRotationRef.current = newRotation
-        rotationRef.current = newRotation
-
-        applyTransform()
+        rotationRef.current = pinchRef.current.startRotation + angleDelta
+        targetRotationRef.current = rotationRef.current
+        applyRotation()
+      } else if (e.touches.length === 1 && dragRef.current.active) {
+        e.preventDefault()
+        const dx = e.touches[0].clientX - dragRef.current.lastX
+        const dy = e.touches[0].clientY - dragRef.current.lastY
+        dragRef.current.lastX = e.touches[0].clientX
+        dragRef.current.lastY = e.touches[0].clientY
+        panCompensated(dx, dy)
       }
     }
+
+    const onTouchEnd = () => { dragRef.current.active = false }
+
+    /* ---- mouse drag (desktop) with rotation compensation ---- */
+    let mDrag = { active: false, lastX: 0, lastY: 0 }
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      const t = e.target as HTMLElement
+      if (t.closest(`.${styles.topBar}`) || t.closest(`.${styles.bottomCenter}`)) return
+      mDrag = { active: true, lastX: e.clientX, lastY: e.clientY }
+    }
+    const onMouseMove = (e: MouseEvent) => {
+      if (!mDrag.active) return
+      const dx = e.clientX - mDrag.lastX
+      const dy = e.clientY - mDrag.lastY
+      mDrag.lastX = e.clientX
+      mDrag.lastY = e.clientY
+      panCompensated(dx, dy)
+    }
+    const onMouseUp = () => { mDrag.active = false }
 
     el.addEventListener('wheel', onWheel, { passive: false })
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('mousedown', onMouseDown)
+    el.addEventListener('mousemove', onMouseMove)
+    el.addEventListener('mouseup', onMouseUp)
+    el.addEventListener('mouseleave', onMouseUp)
 
     return () => {
       el.removeEventListener('wheel', onWheel)
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('mousedown', onMouseDown)
+      el.removeEventListener('mousemove', onMouseMove)
+      el.removeEventListener('mouseup', onMouseUp)
+      el.removeEventListener('mouseleave', onMouseUp)
       cancelAnimationFrame(rafRef.current)
     }
-  }, [applyTransform, startAnimation])
+  }, [applyRotation, startRotation, panCompensated])
 
   const handleRecenter = useCallback(() => {
-    targetScaleRef.current = DEFAULT_SCALE
     targetRotationRef.current = 0
-    startAnimation()
-    const inner = document.querySelector(`.${styles.centerBtn}`) as HTMLButtonElement | null
-    inner?.click()
-  }, [startAnimation])
+    startRotation()
+    mapRef.current?.flyTo(SPB_CENTER, MAP_ZOOM, { duration: 0.5 })
+  }, [startRotation])
 
   return (
     <div className={styles.screen} ref={screenRef}>
@@ -202,13 +245,16 @@ export function MapScreen() {
             touchZoom={false}
             doubleClickZoom={false}
             dragging={false}
+            zoomSnap={0}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
           >
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
               keepBuffer={4}
             />
-            <RecenterButton center={SPB_CENTER} />
-            <DragController expanded={pinsExpanded} />
+            <MapRefGrabber mapRef={mapRef} />
+            <ZoomWatcher onExpandChange={handleExpandChange} />
             {PINS.map(pin => (
               <MapPin
                 key={pin.id}

@@ -6,11 +6,9 @@
   flex-direction: column;
   align-items: center;
   pointer-events: auto;
-  /* Counter-scale to keep pins crisp at any scene zoom;
-     counter-rotate to stay upright. Uses CSS vars from .screen */
-  transform:
-    rotate(calc(-1 * var(--scene-rotation, 0) * 1deg))
-    scale(calc(1 / var(--scene-scale, 1)));
+  /* Counter-rotate to stay upright when scene is rotated.
+     No counter-scale needed — Leaflet handles zoom natively with crisp tiles. */
+  transform: rotate(calc(-1 * var(--scene-rotation, 0) * 1deg));
   transform-origin: center center;
 }
 
