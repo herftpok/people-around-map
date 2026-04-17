@@ -76,7 +76,7 @@ export const PINS: PinData[] = [
   { id: 48, name: 'Руслан',   status: 'бургеры на Невском',           photo: avatarUrl('ruslan') },
   { id: 49, name: 'Милана',   status: '♥',                           photo: avatarUrl('milana') },
   { id: 50, name: 'Тёма',     status: 'последний день лета, гуляем!', photo: avatarUrl('tyoma') },
-].map((p, i) => ({
+].map((p) => ({
   ...p,
   position: [CENTER_LAT + randOffset(), CENTER_LNG + randOffset()] as [number, number],
 }))
