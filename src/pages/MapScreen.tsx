@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import type { Map as LeafletMap } from 'leaflet'
+import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { StarsBackground } from '../components/StarsBackground'
 import { MapPin } from '../components/MapPin'
@@ -8,6 +9,8 @@ import { PINS } from '../data/pins'
 import styles from './MapScreen.module.css'
 
 const SPB_CENTER: [number, number] = [59.9343, 30.3351]
+const MAP_RADIUS_KM = 3  // limit map panning to 3km from center
+const MAP_BOUNDS = L.latLng(SPB_CENTER[0], SPB_CENTER[1]).toBounds(MAP_RADIUS_KM * 2 * 1000)
 const MAP_ZOOM = 13
 const MIN_ZOOM = 13          // can't zoom out past the initial view
 const MAX_VIRTUAL_ZOOM = 22  // virtual zoom range (beyond Leaflet)
@@ -103,7 +106,7 @@ export function MapScreen() {
     }
   }, [animate])
 
-  /* ---- drag with rotation + scale compensation ---- */
+  /* ---- drag with rotation + scale compensation, clamped to 3km bounds ---- */
   const panCompensated = useCallback((dx: number, dy: number) => {
     const map = mapRef.current
     if (!map) return
@@ -112,6 +115,15 @@ export function MapScreen() {
     const mx = (dx * Math.cos(rad) - dy * Math.sin(rad)) / scale
     const my = (dx * Math.sin(rad) + dy * Math.cos(rad)) / scale
     map.panBy([-mx, -my], { animate: false })
+    // clamp to bounds after pan
+    const c = map.getCenter()
+    const clamped = L.latLng(
+      Math.max(MAP_BOUNDS.getSouth(), Math.min(MAP_BOUNDS.getNorth(), c.lat)),
+      Math.max(MAP_BOUNDS.getWest(), Math.min(MAP_BOUNDS.getEast(), c.lng))
+    )
+    if (c.lat !== clamped.lat || c.lng !== clamped.lng) {
+      map.setView(clamped, map.getZoom(), { animate: false })
+    }
   }, [])
 
   /* ---- main event listeners ---- */
@@ -251,6 +263,8 @@ export function MapScreen() {
             zoomSnap={0}
             minZoom={MIN_ZOOM}
             maxZoom={LEAFLET_MAX_ZOOM}
+            maxBounds={MAP_BOUNDS}
+            maxBoundsViscosity={1.0}
           >
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
