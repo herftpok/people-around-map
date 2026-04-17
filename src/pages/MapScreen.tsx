@@ -11,8 +11,8 @@ const SPB_CENTER: [number, number] = [59.9343, 30.3351]
 const MAP_ZOOM = 13
 const MIN_ZOOM = 13          // can't zoom out past the initial view
 const MAX_VIRTUAL_ZOOM = 22  // virtual zoom range (beyond Leaflet)
-const LEAFLET_MAX_ZOOM = 16  // tiles only load up to this level — beyond = pure CSS scale
-const EXPAND_ZOOM = 16       // zoom at which pins expand
+const LEAFLET_MAX_ZOOM = 14  // tiles load only 13→14, beyond = pure CSS scale (less flicker)
+const EXPAND_ZOOM = 15       // virtual zoom at which pins expand
 const EXPAND_DELAY = 150
 const WHEEL_ZOOM_SPEED = 0.006
 const ROTATION_WHEEL_SENSITIVITY = 0.3
