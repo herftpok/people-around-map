@@ -34,7 +34,11 @@ const leafletZoomFor = (z: number) => Math.min(z, LEAFLET_MAX_ZOOM)
 /* ---- Expose map instance to parent via ref ---- */
 function MapRefGrabber({ mapRef }: { mapRef: React.MutableRefObject<LeafletMap | null> }) {
   const map = useMap()
-  useEffect(() => { mapRef.current = map }, [map, mapRef])
+  useEffect(() => {
+    mapRef.current = map
+    // Fit the map exactly to the 3km bounds so no panning is possible at initial zoom
+    map.fitBounds(MAP_BOUNDS, { animate: false, padding: [0, 0] })
+  }, [map, mapRef])
   return null
 }
 
