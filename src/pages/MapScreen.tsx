@@ -8,7 +8,8 @@ const SPB_CENTER: [number, number] = [59.9343, 30.3351]
 const MAP_ZOOM = 15   // higher base zoom for good detail
 
 const DEFAULT_SCALE = 1.35
-const MIN_SCALE = DEFAULT_SCALE - 1  // максимум -1 от начального
+const CIRCLE_VW = 95
+const MIN_SCALE = (100 - 10) / CIRCLE_VW  // круг помещается в экран с ~5vw отступом по бокам
 const MAX_SCALE = 8.0
 const WHEEL_SENSITIVITY = 0.015
 const LERP_SPEED = 0.12
