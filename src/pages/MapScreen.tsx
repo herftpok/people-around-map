@@ -15,6 +15,8 @@ const MIN_SCALE = (100 - 10) / CIRCLE_VW  // круг помещается в э
 const MAX_SCALE = 8.0
 const WHEEL_SENSITIVITY = 0.015
 const LERP_SPEED = 0.12
+const EXPAND_THRESHOLD = 2.5  // scale at which pins expand
+const EXPAND_DELAY = 200      // ms after zoom stops
 
 /* ---- helper: recenter map ---- */
 function RecenterButton({ center }: { center: [number, number] }) {
@@ -46,12 +48,19 @@ export function MapScreen() {
 
   /* Lightweight state broadcast for pin components (throttled via rAF) */
   const [pinView, setPinView] = useState({ scale: DEFAULT_SCALE, rotation: 0 })
+  const [pinsExpanded, setPinsExpanded] = useState(false)
+  const expandTimerRef = useRef(0)
   const pinViewRAF = useRef(0)
   const broadcastPinView = useCallback(() => {
     cancelAnimationFrame(pinViewRAF.current)
     pinViewRAF.current = requestAnimationFrame(() => {
       setPinView({ scale: scaleRef.current, rotation: rotationRef.current })
     })
+    /* Debounced expand: only fires 200ms after zoom crosses threshold and stops */
+    window.clearTimeout(expandTimerRef.current)
+    expandTimerRef.current = window.setTimeout(() => {
+      setPinsExpanded(scaleRef.current >= EXPAND_THRESHOLD)
+    }, EXPAND_DELAY)
   }, [])
 
   const applyTransform = useCallback(() => {
@@ -192,8 +201,9 @@ export function MapScreen() {
               <MapPin
                 key={pin.id}
                 pin={pin}
-                scale={pinView.scale}
+                expanded={pinsExpanded}
                 rotation={pinView.rotation}
+                scale={pinView.scale}
               />
             ))}
           </MapContainer>

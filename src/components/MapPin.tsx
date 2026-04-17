@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { Marker } from 'react-leaflet'
 import L from 'leaflet'
 import type { PinData } from '../data/pins'
@@ -6,54 +6,77 @@ import styles from './MapPin.module.css'
 
 interface Props {
   pin: PinData
-  /** Current CSS scale of the scene (drives size & status reveal) */
-  scale: number
-  /** Current rotation of the scene in degrees (counter-rotated) */
+  /** true when zoomed past threshold (after 200ms debounce) */
+  expanded: boolean
+  /** Current rotation of the scene in degrees */
   rotation: number
+  /** Current scene scale — used to counter-scale status text */
+  scale: number
 }
 
-/* ---- thresholds ---- */
-const SCALE_GROW_START = 2.0   // pins start growing
-const SCALE_GROW_END = 4.5     // pins reach full size
-const PIN_MIN = 14             // px at small zoom
-const PIN_MAX = 38             // px at large zoom
-const STATUS_REVEAL_SCALE = 2.8 // status becomes visible
+const PIN_SMALL = 14  // px — compact circle
+const PIN_LARGE = 52  // px — expanded rounded square (~x4 area)
 
 /** Characters considered "short" — always visible */
 const isShort = (s: string) => [...s].length <= 3
 
-export function MapPin({ pin, scale, rotation }: Props) {
-  const pinSize = Math.round(
-    PIN_MIN + (PIN_MAX - PIN_MIN) * Math.min(1, Math.max(0, (scale - SCALE_GROW_START) / (SCALE_GROW_END - SCALE_GROW_START)))
-  )
-  const statusRevealed = scale >= STATUS_REVEAL_SCALE
+export function MapPin({ pin, expanded, rotation, scale }: Props) {
+  const elRef = useRef<HTMLDivElement | null>(null)
   const short = isShort(pin.status)
 
+  /* Create the icon once per pin — never recreate */
   const icon = useMemo(() => {
-    const statusClass = statusRevealed
-      ? styles.revealed
-      : short
-        ? styles.short
-        : ''
-
-    const html = `
-      <div class="${styles.pin}" style="transform: rotate(${-rotation}deg)">
-        <div class="${styles.statusWrap} ${statusClass}">
-          <span class="${styles.statusText}">${pin.status}</span>
-        </div>
-        <div class="${styles.avatar}" style="--pin-size:${pinSize}px">
-          <img src="${pin.photo}" alt="${pin.name}" loading="lazy" />
-        </div>
+    const wrapper = document.createElement('div')
+    wrapper.className = styles.pin
+    wrapper.innerHTML = `
+      <div class="${styles.statusWrap} ${short ? styles.short : ''}">
+        <span class="${styles.statusText}">${pin.status}</span>
+      </div>
+      <div class="${styles.avatar}" style="background:${pin.bgColor}">
+        <img src="${pin.photo}" alt="${pin.name}" loading="lazy" />
       </div>
     `
+    // Keep ref to wrapper so we can mutate classes/styles
+    return { wrapper, leaflet: null as L.DivIcon | null }
+  }, [pin, short])
 
-    return L.divIcon({
-      html,
+  const leafletIcon = useMemo(() => {
+    const size = expanded ? PIN_LARGE : PIN_SMALL
+    const divIcon = L.divIcon({
+      html: icon.wrapper,
       className: '',
-      iconSize: [pinSize, pinSize],
-      iconAnchor: [pinSize / 2, pinSize / 2],
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
     })
-  }, [pin, pinSize, statusRevealed, short, rotation])
+    icon.leaflet = divIcon
+    return divIcon
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [icon, expanded])
 
-  return <Marker position={pin.position} icon={icon} />
+  /* Update classes & inline styles reactively without recreating icon */
+  useEffect(() => {
+    const w = icon.wrapper
+    if (!w) return
+
+    // Rotation
+    w.style.transform = `rotate(${-rotation}deg)`
+
+    // Expanded state on avatar
+    const avatar = w.querySelector(`.${styles.avatar}`) as HTMLElement | null
+    if (avatar) {
+      avatar.classList.toggle(styles.expanded, expanded)
+    }
+
+    // Status visibility
+    const statusWrap = w.querySelector(`.${styles.statusWrap}`) as HTMLElement | null
+    if (statusWrap) {
+      statusWrap.classList.toggle(styles.revealed, expanded && !short)
+      // Counter-scale the status bubble so it doesn't blow up with scene scale
+      const counterScale = Math.min(1, 1 / scale)
+      statusWrap.style.transform = `translateX(-50%) scale(${counterScale})`
+    }
+  }, [icon, expanded, rotation, scale, short])
+
+  return <Marker position={pin.position} icon={leafletIcon} ref={elRef as never} />
 }
+
