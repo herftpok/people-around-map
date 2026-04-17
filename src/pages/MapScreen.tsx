@@ -155,8 +155,8 @@ export function MapScreen() {
 
   return (
     <div className={styles.screen}>
+      <StarsBackground starCount={350} />
       <div className={styles.scene} ref={sceneRef}>
-        <StarsBackground starCount={350} />
         <div className={styles.glow} />
         <div className={styles.circleWrap}>
           <MapContainer
